@@ -14,14 +14,5 @@ end
 require "logger"
 ManageIQ::Floe.logger = Logger.new(STDOUT)
 
-workflow = ManageIQ::Floe::Workflow.load(opts[:workflow], opts[:inputs], opts[:credentials])
-
-state = workflow.first_state
-input = workflow.context.dup
-
-until state.nil?
-  state, output = state.run!(input)
-  input = output
-end
-
-puts output.inspect
+workflow = ManageIQ::Floe::Workflow.load(opts[:workflow], {"global" => opts[:inputs]}, opts[:credentials])
+pp workflow.run!

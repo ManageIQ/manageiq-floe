@@ -6,28 +6,67 @@ module ManageIQ
   module Floe
     class Workflow
       class << self
-        def load(path_or_io, context = {}, credentials = {})
+        def load(path_or_io, context = nil, credentials = {})
           payload = path_or_io.respond_to?(:read) ? path_or_io.read : File.read(path_or_io)
           new(payload, context, credentials)
         end
       end
 
-      attr_reader :context, :credentials, :first_state, :payload, :states, :states_by_name, :start_at
+      attr_reader :context, :credentials, :payload, :states, :states_by_name, :current_state, :status
 
-      def initialize(payload, context = {}, credentials = {})
+      def initialize(payload, context = nil, credentials = {})
         payload     = JSON.parse(payload)     if payload.kind_of?(String)
         context     = JSON.parse(context)     if context.kind_of?(String)
         credentials = JSON.parse(credentials) if credentials.kind_of?(String)
 
-        @payload        = payload
-        @context        = context
-        @credentials    = credentials
+        @payload     = payload
+        @context     = context || {"global" => {}}
+        @credentials = credentials
+
         @states         = payload["States"].to_a.map { |name, state| State.build!(self, name, state) }
-        @states_by_name = states.to_h { |state| [state.name, state] }
-        @start_at       = @payload["StartAt"]
-        @first_state    = @states_by_name[@start_at]
+        @states_by_name = @states.each_with_object({}) { |state, result| result[state.name] = state }
+        start_at        = @payload["StartAt"]
+
+        @context["states"] ||= []
+        @context["current_state"] ||= start_at
+
+        current_state_name = @context["current_state"]
+        @current_state = @states_by_name[current_state_name]
+
+        @status = current_state_name == start_at ? "pending" : current_state.status
       rescue JSON::ParserError => err
         raise ManageIQ::Floe::InvalidWorkflowError, err.message
+      end
+
+      def step
+        @status = "running" if @status == "pending"
+
+        input = @context["states"]&.last&.dig("output") || @context["global"]
+
+        tick = Time.now.utc
+        next_state, output = current_state.run!(input)
+        tock = Time.now.utc
+
+        @context["states"] << {"name" => current_state.name, "start" => tick, "end" => tock, "time" => tock - tick, "input" => input, "output" => output}
+
+        @status = current_state.status
+
+        next_state_name = next_state&.name
+        @context["current_state"] = next_state_name
+        @current_state = next_state_name && @states_by_name[next_state_name]
+
+        self
+      end
+
+      def run!
+        until end?
+          step
+        end
+        self
+      end
+
+      def end?
+        current_state.nil?
       end
 
       def to_dot

@@ -36,7 +36,11 @@ module ManageIQ
         end
 
         def context
-          workflow.context
+          workflow.context["global"]
+        end
+
+        def status
+          end? ? "success" : "running"
         end
 
         def run!(input)
