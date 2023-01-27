@@ -35,6 +35,10 @@ module ManageIQ
           @end
         end
 
+        def status
+          end? ? "success" : "running"
+        end
+
         def run!
           logger.info("Running state: [#{name}]")
 
