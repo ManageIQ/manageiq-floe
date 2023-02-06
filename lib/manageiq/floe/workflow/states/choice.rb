@@ -33,13 +33,7 @@ module ManageIQ
           def to_dot_transitions
             [].tap do |a|
               choices.each do |choice|
-                choice_label =
-                  if choice.payload["NumericEquals"]
-                    "#{choice.variable} == #{choice.payload["NumericEquals"]}"
-                  else
-                    "Unknown" # TODO
-                  end
-
+                choice_label = choice.to_dot_label
                 a << "  #{name} -> #{choice.next} [ label=#{choice_label.inspect} ]"
               end
 
